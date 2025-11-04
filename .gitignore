@@ -27,3 +27,4 @@ secrets.*
 ehthumbs.db
 Thumbs.db
 codemie*
+.codemie/
