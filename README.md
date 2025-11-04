@@ -1,251 +1,125 @@
 # ECS Jenkins GitHub CDK Project
 
-This project is a CDK implementation of the ECS Jenkins with GitHub integration infrastructure, replicating the functionality of the original Terraform implementation. It creates a secure, scalable Jenkins CI/CD environment running on AWS ECS with GitHub integration, complete with monitoring, security controls, and proper networking.
+This project implements an AWS infrastructure for running Jenkins in ECS with GitHub integration, using AWS CDK.
 
-> **Note for Terraform Users**: If you're familiar with Terraform and new to CDK, check out the [USAGE.md](./USAGE.md) file for a guide specifically designed for Terraform users.
+## 🏗️ Architecture
 
-## Architecture
+The project creates a fully automated infrastructure with:
 
-The infrastructure consists of the following components:
+- ECS cluster for containerized applications
+- Jenkins CI/CD server on EC2
+- RDS database
+- AWS CloudWatch monitoring
+- WAF security protection
+- Load balancers for traffic distribution
 
-- **VPC and Network**: VPC with public, private, and database subnets across multiple availability zones, NAT Gateway, Internet Gateway.
-- **ECS**: ECS Cluster, Task Definitions, Services running containerized applications.
-- **Security**: WAF with OWASP Top 10 protections, Security Groups, and IAM roles with least privilege.
-- **Database**: RDS PostgreSQL instance in a private subnet.
-- **CI/CD**: Jenkins server for continuous integration and delivery, integrated with GitHub.
-- **Monitoring**: Prometheus and Grafana for monitoring and visualization.
-- **Route53**: DNS configuration for the application.
+## 🔧 Multi-Environment Setup
 
-### Architecture Diagram
+The project supports three environments:
 
-```mermaid
-graph TD
-    subgraph "AWS Cloud"
-        subgraph "VPC"
-            subgraph "Public Subnets"
-                ALB[Application Load Balancer]                
-                WAF[Web Application Firewall] --> ALB
-                NAT[NAT Gateway]                
-            end
+1. **Development (dev)**: A smaller version of the infrastructure for development and testing purposes.
+   - Located in `us-east-1` region
+   - Smaller instance types
+   - Fewer ECS tasks/containers
+   - Non-production database
 
-            subgraph "Private Subnets"
-                ECS[ECS Cluster]
-                subgraph "ECS Services"
-                    Jenkins[Jenkins Service]
-                    App[Application Services]
-                end
-                ECS --> Jenkins
-                ECS --> App
-            end
+2. **Production (prod)**: The main production environment with full capacity.
+   - Located in `us-east-1` region
+   - Production-grade instance types
+   - Multiple ECS tasks/containers for high availability
+   - Multi-AZ database
 
-            subgraph "Database Subnets"
-                RDS[PostgreSQL RDS]
-            end
+3. **Disaster Recovery (dr)**: A pilot light DR environment in a different AWS region.
+   - Located in `us-west-2` region (West Coast)
+   - Minimal resources during normal operation
+   - Can scale up quickly during disaster recovery
+   - Kept in sync with production
 
-            ALB --> Jenkins
-            ALB --> App
-            Jenkins --> RDS
-            App --> RDS
+## 🔄 CI/CD Pipeline
 
-            subgraph "Monitoring"
-                CW[CloudWatch]
-                Prometheus
-                Grafana --> Prometheus
-            end
+The project includes a GitHub Actions CI/CD pipeline that automates deployments to all three environments:
 
-            Jenkins --> CW
-            App --> CW
-            RDS --> CW
-        end
+- Push to `main` branch deploys to dev environment
+- Push to `production` branch deploys to prod environment
+- Push to `dr` branch deploys to dr environment
 
-        GitHub[GitHub] -.-> |Webhooks| Jenkins
-        Route53[Route53 DNS] --> ALB
+Additionally:
+- After a production deployment, the DR environment is automatically synchronized
+- The DR environment can be manually activated in case of a disaster
 
-        IAM[IAM Roles/Policies]
-        IAM -.-> Jenkins
-        IAM -.-> ECS
-    end
+## 📋 Prerequisites
 
-    DevOps[DevOps Engineer] --> GitHub
-    Users[End Users] --> Route53
-```
+- Node.js 16+
+- AWS CLI configured with appropriate permissions
+- GitHub account for CI/CD integration
 
-### Deployment Flow
+## 🚀 Getting Started
 
-1. **Network Layer**: VPC, subnets, route tables, internet gateway, NAT gateway
-2. **Security Layer**: Security groups, IAM roles and policies, WAF configuration
-3. **Database Layer**: RDS PostgreSQL instance in private subnet
-4. **Compute Layer**: ECS cluster, task definitions, and services
-5. **CI/CD Layer**: Jenkins server configuration and GitHub integration
-6. **Monitoring Layer**: Prometheus and Grafana setup
-7. **DNS Layer**: Route53 records for public access
+1. Clone this repository.
 
-## Project Structure
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-The project is organized as a set of CDK constructs:
+3. Create a `.env` file by copying `.env.example` and filling in the required values.
 
-- `bin/cdk-projects.ts`: Entry point for the CDK application
-- `lib/ecs-jenkins-github-stack.ts`: Main stack that composes all constructs
-- `lib/constructs/network/`: Network infrastructure components
-  - VPC configuration with public, private, and database subnets
-  - Internet Gateway and NAT Gateway for outbound traffic
-  - Security Groups for network isolation
-- `lib/constructs/ecs/`: ECS cluster, services, and tasks
-  - ECS Cluster configuration
-  - Task Definitions for Jenkins and applications
-  - Autoscaling policies for ECS services
-- `lib/constructs/database/`: RDS database configuration
-  - PostgreSQL RDS instance in private subnet
-  - Database security and parameter groups
-- `lib/constructs/security/`: WAF, Security Groups, and security configurations
-  - Web Application Firewall (WAF) with OWASP Top 10 protections
-  - Security Groups for network access control
-  - AWS Config Rules for compliance monitoring
-- `lib/constructs/cicd/`: Jenkins server and CI/CD pipeline components
-  - Jenkins controller running on ECS
-  - Integration with GitHub for source code management
-  - Pipeline configuration for automated builds and deployments
-- `lib/constructs/monitoring/`: Prometheus and Grafana monitoring setup
-  - Prometheus for metrics collection
-  - Grafana for visualization and dashboards
-  - CloudWatch for logs and alarms
-- `lib/constructs/iam/`: IAM roles and policies
-  - Access control for ECS tasks and services
-  - Service roles with least privilege principles
-- `lib/constructs/route53/`: DNS configuration
-  - Public DNS records for services
-  - DNS health checks for high availability
+4. Deploy the stacks:
+   ```bash
+   # Deploy development environment
+   npx cdk deploy EcsJenkinsGithubDevStack
+   
+   # Deploy production environment
+   npx cdk deploy EcsJenkinsGithubProdStack
+   
+   # Deploy DR environment 
+   npx cdk deploy EcsJenkinsGithubDrStack
+   ```
 
-## Deployment
+## 🔄 Environment-Specific Values
 
-### Prerequisites
+Each environment has its own configuration values:
 
-- AWS CLI configured with appropriate credentials
-- Node.js and npm installed
-- AWS CDK installed (`npm install -g aws-cdk`)
+### Development Environment (dev)
+- Smaller EC2 instances (`t3.small`)
+- Minimal scaling (1-3 instances)
+- Uses spot instances to reduce costs
+- Doesn't enable AWS Security Hub
 
-### Bootstrap CDK (first time only)
+### Production Environment (prod)
+- Larger EC2 instances (`m5.large`)
+- Higher scaling capacity (2-10 instances)
+- Uses on-demand instances for reliability
+- Enables AWS Security Hub
+- Multi-AZ database deployment
 
-```bash
-cdk bootstrap aws://ACCOUNT-NUMBER/REGION
-```
+### DR Environment (dr)
+- Minimal resources during normal operation (`t3.micro`)
+- Can scale up to match production capacity when needed
+- Located in a different AWS region (`us-west-2`)
+- Kept in sync with production data
 
-### Deploy the Stack
+## 🔐 Security
 
-```bash
-# Set environment variables for sensitive information
-export DB_USERNAME=your_db_username
-export DB_PASSWORD=your_db_password
-export GRAFANA_ADMIN_PASSWORD=your_grafana_password
+The project follows security best practices:
+- TLS for all public endpoints
+- Security groups with least privilege
+- IAM roles with minimum permissions
+- Web Application Firewall (WAF) protection
+- Content Security Policy headers
 
-# Required environment variables
-export DB_USERNAME=your_db_username
-export DB_PASSWORD=your_db_password
-export GRAFANA_ADMIN_PASSWORD=your_grafana_password
+## 🛠️ Utilities
 
-# Deploy the development stack
-cdk deploy EcsJenkinsGithubDevStack
-```
+The project includes several utility scripts:
 
-## Configuration
+- `scripts/sync-dr.sh`: Synchronizes data from production to DR
+- `scripts/activate-dr.sh`: Activates the DR environment in case of disaster
 
-The main configuration is in `bin/cdk-projects.ts`. You can modify the parameters for each environment:
+## 📖 Documentation
 
-- Network configurations (VPC CIDR, subnet CIDRs)
-- Instance types and capacities
-- Database credentials (should use environment variables or AWS Secrets Manager for production)
-- OWASP security settings
+Additional documentation is available in the `docs` directory:
+- [DR Runbook](docs/DR-RUNBOOK.md): Detailed procedures for disaster recovery
 
-## OWASP Security Features
+## 🙋 Support
 
-This project incorporates several OWASP security best practices:
-
-- WAF with OWASP Top 10 protections
-- Rate limiting to prevent DDoS attacks
-- Input validation and SQL injection prevention
-- XSS protection
-- Security headers on all HTTP responses
-- Encrypted data at rest and in transit
-- Least privilege IAM policies
-
-### Security and Compliance Scanning
-
-The project includes integration with `cdk-nag` to scan for security issues and compliance:
-
-```bash
-# Build and scan for security issues
-npm run build
-cdk synth  # Security scan results will be in the output
-```
-
-ESLint is also configured for code quality and security best practices:
-
-```bash
-# Run linting
-npm run lint
-```
-
-## Differences from Terraform Implementation
-
-The CDK implementation follows the same architecture and provides the same functionality as the Terraform implementation, but with a few differences:
-
-- CDK uses AWS CloudFormation under the hood, which may result in slightly different resource creation order
-- CDK's programming model allows for more abstraction and reuse of code
-- Some AWS-specific features are implemented differently due to CDK's constructs design.
-
-## Useful Commands
-
-* `npm run build` - Compile TypeScript to JavaScript
-* `npm run watch` - Watch for changes and compile
-* `npm run test` - Run the Jest unit tests
-* `npm run lint` - Run code linting and security checks
-* `cdk deploy` - Deploy the stack to your AWS account
-* `cdk diff` - Compare deployed stack with current state
-* `cdk synth` - Emit the synthesized CloudFormation template
-* `cdk destroy` - Remove all resources from AWS
-
-## CI/CD Workflow
-
-This project includes a Jenkinsfile that defines the CI/CD pipeline workflow:
-
-1. **Source**: Code is pulled from GitHub repository
-2. **Build**: TypeScript is compiled to JavaScript
-3. **Test**: Unit tests are run
-4. **Security Scan**: Code is scanned for vulnerabilities
-5. **Plan**: CDK diff is generated to preview changes
-6. **Deploy**: CDK stack is deployed to AWS (requires approval for production)
-7. **Post-deployment Tests**: Validates the deployed infrastructure
-
-## Extending the Project
-
-### Adding a New Service
-
-To add a new service to the ECS cluster:
-
-1. Create a new construct in the appropriate directory (e.g., `lib/constructs/ecs/new-service.ts`)
-2. Define the task definition, service, and any required resources
-3. Import and instantiate the construct in the main stack (`lib/ecs-jenkins-github-stack.ts`)
-4. Deploy the updated stack
-
-### Modifying Security Rules
-
-Security groups and WAF rules can be modified in the security constructs:
-
-- Update WAF rules in `lib/constructs/security/waf-construct.ts`
-- Modify security groups in the relevant service constructs
-
-## Required Environment Variables
-
-This project requires the following environment variables to be set before deployment:
-
-### Development Environment
-- `DB_USERNAME`: Database administrator username
-- `DB_PASSWORD`: Database administrator password
-- `GRAFANA_ADMIN_PASSWORD`: Password for Grafana admin user
-
-### Production Environment
-- `PROD_DB_USERNAME`: Production database administrator username
-- `PROD_DB_PASSWORD`: Production database administrator password
-- `PROD_GRAFANA_ADMIN_PASSWORD`: Password for production Grafana admin user
-
-**Important:** Never commit actual credentials to your repository. Use environment variables or AWS Secrets Manager for sensitive information.
+For any issues or questions, please contact the project maintainers.
