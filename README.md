@@ -1,4 +1,4 @@
-# ECS Jenkins GitHub CDK Project - PRODUCTION BRANCH
+# ECS Jenkins GitHub CDK Project - DISASTER RECOVERY BRANCH
 
 This project implements an AWS infrastructure for running Jenkins in ECS with GitHub integration, using AWS CDK.
 
